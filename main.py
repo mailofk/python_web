@@ -1,26 +1,40 @@
-from requests import get
-from bs4 import BeautifulSoup
-from extractors.wwr import extract_wwr_jobs
+from flask import Flask, render_template, request, redirect, send_file
 from extractors.indeed import extract_indeed_jobs
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+from extractors.wwr import extract_wwr_jobs
+from extractors.file import save_to_file
 
-options = Options()
-options.add_argument("--no-sandbox")
-options.add_argument("--disable-dev-shm-usage")
+app = Flask("JobScrapper")
 
-browser = webdriver.Chrome(options = options)
+db = {}
 
-keyword = input("찾을 직업 : ")
+@app.route("/")
+def home():
+    return render_template("home.html", name="kweon")
 
-indeed = extract_indeed_jobs(keyword)
-wwr = extract_wwr_jobs(keyword)
-jobs = indeed+wwr
 
-file = open(f"{keyword}.csv","w")
-file.write("Position,Company,Location,URL\n")
+@app.route("/search")
+def search():
+  keyword = request.args.get("keyword")
+  if keyword == None:
+    return redirect("/")
+  if keyword in db:
+    jobs = db[keyword]
+  else:
+    indeed = extract_indeed_jobs(keyword)
+    wwr = extract_wwr_jobs(keyword)
+    jobs = indeed + wwr
+    db[keyword] = jobs
+  return render_template("search.html",keyword 
+ = keyword, jobs = jobs)
 
-for job in jobs:
-  file.write(f"{job['position']},{job['company']},{job['location']},{job['link']}\n")
-
-file.close()
+@app.route("/export")
+def export():
+  keyword = request.args.get("keyword")
+  if keyword == None:
+    return redirect("/")
+  if keyword not in db:
+    return redirect(f"/search?keyword={keyword}")
+  save_to_file(keyword,db[keyword])
+  return send_file(f"{keyword}.csv", as_attachment=True)
+  
+app.run(port='3000', host='0.0.0.0')
